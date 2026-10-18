@@ -15,11 +15,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Debug - List all repository files
+      - name: Debug - List all files in repo
         run: |
-          echo "=== Root directory files ==="
+          echo "=== Root Files ==="
           ls -la
-          echo "=== Finding zip files ==="
+          echo "=== Looking for any zip files ==="
           find . -name "*.zip"
 
       - name: Extract zip file
@@ -27,14 +27,14 @@ jobs:
           mkdir -p extracted_app
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-            echo "Extracting: $ZIP_FILE"
+            echo "Found zip: $ZIP_FILE"
             unzip -o "$ZIP_FILE" -d extracted_app
           else
-            echo "Error: Zip file not found!"
+            echo "ERROR: No zip file found in repository!"
             exit 1
           fi
-          echo "=== Full list of extracted contents ==="
-          find extracted_app -maxdepth 4
+          echo "=== Listing all files after extraction ==="
+          find extracted_app -type f
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -44,36 +44,28 @@ jobs:
 
       - name: Find and Build Project
         run: |
-          # Search for gradlew or build.gradle anywhere in the workspace
-          GRADLEW_FILE=$(find . -name "gradlew" -type f | head -n 1)
-          
-          if [ -n "$GRADLEW_FILE" ]; then
-            GRADLE_DIR=$(dirname "$GRADLEW_FILE")
-            echo "Found gradlew in: $GRADLE_DIR"
-            cd "$GRADLE_DIR"
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            echo "gradlew not found, searching for build.gradle..."
-            BUILD_FILE=$(find . -name "build.gradle" -type f | head -n 1)
-            if [ -n "$BUILD_FILE" ]; then
-              BUILD_DIR=$(dirname "$BUILD_FILE")
-              echo "Found build.gradle in: $BUILD_DIR"
-              cd "$BUILD_DIR"
+          # Search for build.gradle anywhere
+          BUILD_FILE=$(find . -name "build.gradle" -type f | head -n 1)
+          if [ -n "$BUILD_FILE" ]; then
+            PROJECT_DIR=$(dirname "$BUILD_FILE")
+            echo "Found build.gradle in: $PROJECT_DIR"
+            cd "$PROJECT_DIR"
+            if [ -f "./gradlew" ]; then
+              chmod +x gradlew
+              ./gradlew assembleDebug
+            else
+              echo "gradlew not found, generating wrapper..."
               gradle wrapper || true
               if [ -f "./gradlew" ]; then
                 chmod +x gradlew
                 ./gradlew assembleDebug
               else
-                gradle assembleDebug || {
-                  echo "Error: Gradle build failed."
-                  exit 1
-                }
+                gradle assembleDebug
               fi
-            else
-              echo "Error: build.gradle not found anywhere in the repository!"
-              exit 1
             fi
+          else
+            echo "ERROR: build.gradle not found anywhere in the repository!"
+            exit 1
           fi
 
       - name: Upload APK Artifact
