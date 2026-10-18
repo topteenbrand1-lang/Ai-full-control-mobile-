@@ -15,25 +15,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: List files for debugging
-        run: |
-          echo "=== Root Files ==="
-          ls -la
-
       - name: Extract zip file
         run: |
           mkdir -p extracted_app
-          # Find zip file automatically in case name differs slightly
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-          if [ -n "$ZIP_FILE" ]; then
-            echo "Found zip file: $ZIP_FILE"
-            unzip -o "$ZIP_FILE" -d extracted_app
-          else
-            echo "Error: No zip file found!"
-            exit 1
-          fi
-          echo "=== Extracted Files ==="
-          ls -la extracted_app
+          echo "Extracting $ZIP_FILE..."
+          unzip -o "$ZIP_FILE" -d extracted_app
+          echo "=== Contents of extracted_app ==="
+          find extracted_app -maxdepth 3
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -41,19 +30,36 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Find and Build Gradle Project
+      - name: Find and Build Project
         run: |
-          # Search for gradlew in the workspace
-          GRADLE_FILE=$(find . -name "gradlew" -type f | head -n 1)
-          if [ -n "$GRADLE_FILE" ]; then
-            GRADLE_DIR=$(dirname "$GRADLE_FILE")
-            echo "Found Gradle project in: $GRADLE_DIR"
+          # Search for gradlew
+          GRADLEW_FILE=$(find extracted_app -name "gradlew" -type f | head -n 1)
+          
+          if [ -n "$GRADLEW_FILE" ]; then
+            GRADLE_DIR=$(dirname "$GRADLEW_FILE")
+            echo "Found gradlew in: $GRADLE_DIR"
             cd "$GRADLE_DIR"
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "Error: gradlew file not found anywhere!"
-            exit 1
+            echo "gradlew not found, searching for build.gradle..."
+            BUILD_FILE=$(find extracted_app -name "build.gradle" -type f | head -n 1)
+            if [ -n "$BUILD_FILE" ]; then
+              BUILD_DIR=$(dirname "$BUILD_FILE")
+              echo "Found build.gradle in: $BUILD_DIR"
+              cd "$BUILD_DIR"
+              gradle wrapper || true
+              if [ -f "./gradlew" ]; then
+                chmod +x gradlew
+                ./gradlew assembleDebug
+              else
+                echo "Error: Could not generate gradlew wrapper."
+                exit 1
+              fi
+            else
+              echo "Error: Project files not found in the zip archive!"
+              exit 1
+            fi
           fi
 
       - name: Upload APK Artifact
