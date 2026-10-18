@@ -17,6 +17,7 @@ jobs:
 
       - name: Extract zip file
         run: |
+          mkdir -p extracted_app
           unzip -o AI-Full-Control-Phone-v1.0.0-source.zip -d extracted_app
 
       - name: Set up JDK 17
@@ -27,15 +28,16 @@ jobs:
 
       - name: Find and Build Gradle Project
         run: |
-          # Find directory containing gradlew
-          GRADLE_DIR=$(find extracted_app -name "gradlew" -exec dirname {} \;)
-          if [ -n "$GRADLE_DIR" ]; then
+          # Search the entire workspace for gradlew
+          GRADLE_FILE=$(find . -name "gradlew" -type f | head -n 1)
+          if [ -n "$GRADLE_FILE" ]; then
+            GRADLE_DIR=$(dirname "$GRADLE_FILE")
             echo "Found Gradle project in: $GRADLE_DIR"
             cd "$GRADLE_DIR"
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "gradlew file not found in extracted zip!"
+            echo "Error: gradlew file not found anywhere in the repository!"
             exit 1
           fi
 
@@ -44,4 +46,3 @@ jobs:
         with:
           name: app-debug-apk
           path: '**/build/outputs/apk/debug/*.apk'
-          
