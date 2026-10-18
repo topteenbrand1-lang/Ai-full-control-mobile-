@@ -15,14 +15,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Debug - List all repository files
+        run: |
+          echo "=== Root directory files ==="
+          ls -la
+          echo "=== Finding zip files ==="
+          find . -name "*.zip"
+
       - name: Extract zip file
         run: |
           mkdir -p extracted_app
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-          echo "Extracting $ZIP_FILE..."
-          unzip -o "$ZIP_FILE" -d extracted_app
-          echo "=== Contents of extracted_app ==="
-          find extracted_app -maxdepth 3
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Extracting: $ZIP_FILE"
+            unzip -o "$ZIP_FILE" -d extracted_app
+          else
+            echo "Error: Zip file not found!"
+            exit 1
+          fi
+          echo "=== Full list of extracted contents ==="
+          find extracted_app -maxdepth 4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -32,8 +44,8 @@ jobs:
 
       - name: Find and Build Project
         run: |
-          # Search for gradlew
-          GRADLEW_FILE=$(find extracted_app -name "gradlew" -type f | head -n 1)
+          # Search for gradlew or build.gradle anywhere in the workspace
+          GRADLEW_FILE=$(find . -name "gradlew" -type f | head -n 1)
           
           if [ -n "$GRADLEW_FILE" ]; then
             GRADLE_DIR=$(dirname "$GRADLEW_FILE")
@@ -43,7 +55,7 @@ jobs:
             ./gradlew assembleDebug
           else
             echo "gradlew not found, searching for build.gradle..."
-            BUILD_FILE=$(find extracted_app -name "build.gradle" -type f | head -n 1)
+            BUILD_FILE=$(find . -name "build.gradle" -type f | head -n 1)
             if [ -n "$BUILD_FILE" ]; then
               BUILD_DIR=$(dirname "$BUILD_FILE")
               echo "Found build.gradle in: $BUILD_DIR"
@@ -53,11 +65,13 @@ jobs:
                 chmod +x gradlew
                 ./gradlew assembleDebug
               else
-                echo "Error: Could not generate gradlew wrapper."
-                exit 1
+                gradle assembleDebug || {
+                  echo "Error: Gradle build failed."
+                  exit 1
+                }
               fi
             else
-              echo "Error: Project files not found in the zip archive!"
+              echo "Error: build.gradle not found anywhere in the repository!"
               exit 1
             fi
           fi
