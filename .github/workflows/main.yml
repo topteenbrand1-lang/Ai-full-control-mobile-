@@ -17,19 +17,12 @@ jobs:
         with:
           lfs: true
 
-      - name: Verify Large Zip File
-        run: |
-          echo "Checking file size and presence..."
-          ls -lh AI-Full-Control-Phone-v1.0.0-source.zip || find . -name "*.zip" -ls
-
       - name: Extract zip file
         run: |
           mkdir -p extracted_app
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-          echo "Extracting large zip: $ZIP_FILE"
+          echo "Extracting zip: $ZIP_FILE"
           unzip -o "$ZIP_FILE" -d extracted_app
-          echo "=== Top directories inside extracted_app ==="
-          ls -la extracted_app
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -37,33 +30,26 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Find and Build Project
+      - name: Build Android Project
         run: |
-          echo "Searching for build.gradle..."
-          BUILD_FILE=$(find extracted_app -name "build.gradle" -type f | head -n 1)
+          # Go directly to the verified project directory
+          cd extracted_app/AI-Full-Control-Phone
           
-          if [ -n "$BUILD_FILE" ]; then
-            PROJECT_DIR=$(dirname "$BUILD_FILE")
-            echo "Found build.gradle in: $PROJECT_DIR"
-            cd "$PROJECT_DIR"
-            
+          echo "Current working directory: $(pwd)"
+          ls -la
+          
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            echo "gradlew wrapper not found, generating..."
+            gradle wrapper || true
             if [ -f "./gradlew" ]; then
               chmod +x gradlew
               ./gradlew assembleDebug
             else
-              echo "Generating gradle wrapper..."
-              gradle wrapper || true
-              if [ -f "./gradlew" ]; then
-                chmod +x gradlew
-                ./gradlew assembleDebug
-              else
-                gradle assembleDebug
-              fi
+              gradle assembleDebug
             fi
-          else
-            echo "ERROR: build.gradle still not found. Listing all extracted contents:"
-            find extracted_app -maxdepth 3
-            exit 1
           fi
 
       - name: Upload APK Artifact
