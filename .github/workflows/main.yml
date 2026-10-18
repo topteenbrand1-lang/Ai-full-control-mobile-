@@ -12,34 +12,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with LFS
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      - name: Debug and List Files
+      - name: Verify Large Zip File
         run: |
-          echo "--- Root Directory Contents ---"
-          ls -la
-          echo "--- Checking for ZIP file ---"
-          if [ -f "AI-Full-Control-Phone-v1.0.0-source.zip" ]; then
-            echo "ZIP file found directly in root!"
-          else
-            echo "ZIP file not found in root, searching..."
-            find . -name "*.zip"
-          fi
+          echo "Checking file size and presence..."
+          ls -lh AI-Full-Control-Phone-v1.0.0-source.zip || find . -name "*.zip" -ls
 
       - name: Extract zip file
         run: |
           mkdir -p extracted_app
-          ZIP_NAME="AI-Full-Control-Phone-v1.0.0-source.zip"
-          if [ -f "$ZIP_NAME" ]; then
-            echo "Unzipping $ZIP_NAME..."
-            unzip -o "$ZIP_NAME" -d extracted_app
-          else
-            FOUND_ZIP=$(find . -name "*.zip" | head -n 1)
-            echo "Unzipping found zip: $FOUND_ZIP"
-            unzip -o "$FOUND_ZIP" -d extracted_app
-          fi
-          echo "--- Contents of extracted_app ---"
+          ZIP_FILE=$(find . -name "*.zip" | head -n 1)
+          echo "Extracting large zip: $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d extracted_app
+          echo "=== Top directories inside extracted_app ==="
           ls -la extracted_app
 
       - name: Set up JDK 17
@@ -50,7 +39,7 @@ jobs:
 
       - name: Find and Build Project
         run: |
-          echo "Searching for build.gradle inside extracted_app..."
+          echo "Searching for build.gradle..."
           BUILD_FILE=$(find extracted_app -name "build.gradle" -type f | head -n 1)
           
           if [ -n "$BUILD_FILE" ]; then
@@ -59,22 +48,21 @@ jobs:
             cd "$PROJECT_DIR"
             
             if [ -f "./gradlew" ]; then
-              echo "Found gradlew, executing..."
               chmod +x gradlew
               ./gradlew assembleDebug
             else
-              echo "gradlew not found, generating wrapper..."
+              echo "Generating gradle wrapper..."
               gradle wrapper || true
               if [ -f "./gradlew" ]; then
                 chmod +x gradlew
                 ./gradlew assembleDebug
               else
-                echo "Trying direct gradle assembleDebug..."
                 gradle assembleDebug
               fi
             fi
           else
-            echo "ERROR: build.gradle not found in extracted_app!"
+            echo "ERROR: build.gradle still not found. Listing all extracted contents:"
+            find extracted_app -maxdepth 3
             exit 1
           fi
 
